@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
-import styles from "../styles";
 import { getContract } from "../contracts/contract";
-import { formatEther } from "ethers";
 
 export default function CreditAssessmentPage() {
   const [creditScore, setCreditScore] = useState(0);
@@ -28,38 +26,25 @@ export default function CreditAssessmentPage() {
       }
 
       const contract = await getContract();
-      if (!contract) {
-        setError("Contract connection failed");
-        return;
-      }
-
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      if (accounts.length === 0) {
-        setError("Connect your wallet");
-        return;
-      }
-
       const currentUserAddress = accounts[0];
       setUserAddress(currentUserAddress);
 
-      const allLoans = await contract.getAllLoans();
-      const loansWithId = allLoans.map((loan, index) => ({
+      const allLoans = await contract.getBorrowerLoans(currentUserAddress);
+      const loansWithParsed = allLoans.map((loan, index) => ({
         ...loan,
-        id: loan.id?.toString() || (index + 1).toString()
+        id: index + 1,
+        amount: parseFloat(loan.amount.toString()),
+        monthlyPayment: parseFloat(loan.monthlyPayment.toString()),
+        totalAmountDue: parseFloat(loan.totalAmountDue.toString()),
+        status: Number(loan.status)
       }));
 
-      const userLoans = loansWithId.filter(
-        loan => loan.borrower.toLowerCase() === currentUserAddress.toLowerCase()
-      );
+      setCreditHistory(loansWithParsed);
 
-      setCreditHistory(userLoans);
-
-      try {
-        const score = await contract.getCreditScore(currentUserAddress);
-        setCreditScore(Number(score));
-      } catch {
-        setCreditScore(calculateCreditScore(userLoans));
-      }
+      // Prefer frontend calculation for accurate score
+      const score = calculateCreditScore(loansWithParsed);
+      setCreditScore(score);
 
     } catch (err) {
       setError("Failed to load data");
@@ -74,11 +59,11 @@ export default function CreditAssessmentPage() {
   }, []);
 
   const getCreditScoreColor = (score) => {
-    if (score >= 750) return "#4CAF50";
-    if (score >= 650) return "#2196F3";
-    if (score >= 550) return "#ff8800";
-    if (score > 0) return "#ff4444";
-    return "#666";
+    if (score >= 750) return "#10b981";
+    if (score >= 650) return "#3b82f6";
+    if (score >= 550) return "#f59e0b";
+    if (score > 0) return "#ef4444";
+    return "#6b7280";
   };
 
   const getCreditScoreLabel = (score) => {
@@ -91,11 +76,11 @@ export default function CreditAssessmentPage() {
 
   const metrics = {
     totalLoans: creditHistory.length,
-    repaidLoans: creditHistory.filter(loan => Number(loan.status) === 2).length,
-    activeLoans: creditHistory.filter(loan => Number(loan.status) === 1).length,
-    defaultedLoans: creditHistory.filter(loan => Number(loan.status) === 3).length,
-    totalBorrowed: creditHistory.reduce((sum, loan) => sum + parseFloat(formatEther(loan.amount)), 0).toFixed(4),
-    repaymentRate: creditHistory.length > 0 ? ((creditHistory.filter(loan => Number(loan.status) === 2).length / creditHistory.length) * 100).toFixed(1) : 0
+    repaidLoans: creditHistory.filter(loan => loan.status === 2).length,
+    activeLoans: creditHistory.filter(loan => loan.status === 1).length,
+    defaultedLoans: creditHistory.filter(loan => loan.status === 3).length,
+    totalBorrowed: creditHistory.reduce((sum, loan) => sum + loan.amount, 0).toFixed(4),
+    repaymentRate: creditHistory.length > 0 ? ((creditHistory.filter(loan => loan.status === 2).length / creditHistory.length) * 100).toFixed(1) : 0
   };
 
   const creditTips = creditScore >= 750 ? [
@@ -115,78 +100,382 @@ export default function CreditAssessmentPage() {
     "🎯 Focus on your first payment"
   ];
 
-  if (loading) return <div style={styles.section}><h2>Loading...</h2></div>;
+  const styles = {
+    container: {
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '20px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    },
+    header: {
+      fontSize: '32px',
+      fontWeight: '700',
+      color: '#1f2937',
+      marginBottom: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    },
+    subtitle: {
+      fontSize: '16px',
+      color: '#6b7280',
+      marginBottom: '32px'
+    },
+    loadingContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '80px 20px',
+      backgroundColor: '#f9fafb',
+      borderRadius: '12px',
+      border: '1px solid #e5e7eb'
+    },
+    spinner: {
+      width: '40px',
+      height: '40px',
+      border: '4px solid #e5e7eb',
+      borderTop: '4px solid #3b82f6',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite',
+      marginBottom: '16px'
+    },
+    errorAlert: {
+      padding: '16px',
+      backgroundColor: '#fef2f2',
+      border: '1px solid #fecaca',
+      borderRadius: '8px',
+      color: '#dc2626',
+      marginBottom: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    creditScoreCard: {
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      padding: '32px',
+      textAlign: 'center',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e5e7eb',
+      marginBottom: '24px',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+    creditScoreNumber: {
+      fontSize: '64px',
+      fontWeight: '800',
+      margin: '16px 0',
+      textShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+    },
+    creditScoreLabel: {
+      fontSize: '20px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '1px'
+    },
+    gridContainer: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: '24px',
+      marginBottom: '24px'
+    },
+    card: {
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      border: '1px solid #e5e7eb'
+    },
+    cardTitle: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#1f2937',
+      marginBottom: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    metricsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+      gap: '16px'
+    },
+    metric: {
+      textAlign: 'center',
+      padding: '16px',
+      backgroundColor: '#f9fafb',
+      borderRadius: '8px',
+      border: '1px solid #e5e7eb'
+    },
+    metricValue: {
+      fontSize: '24px',
+      fontWeight: '700',
+      color: '#1f2937',
+      marginBottom: '4px'
+    },
+    metricLabel: {
+      fontSize: '12px',
+      color: '#6b7280',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    tipsList: {
+      listStyle: 'none',
+      padding: 0,
+      margin: 0
+    },
+    tipItem: {
+      padding: '12px 0',
+      borderBottom: '1px solid #f3f4f6',
+      fontSize: '14px',
+      color: '#374151'
+    },
+    loanHistoryItem: {
+      padding: '16px',
+      marginBottom: '12px',
+      borderRadius: '8px',
+      backgroundColor: '#f9fafb',
+      border: '1px solid #e5e7eb',
+      borderLeft: '4px solid',
+      transition: 'all 0.2s ease'
+    },
+    loanHistoryHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '8px'
+    },
+    loanId: {
+      fontSize: '16px',
+      fontWeight: '600',
+      color: '#1f2937'
+    },
+    statusBadge: {
+      padding: '4px 8px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      color: 'white'
+    },
+    loanAmount: {
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#059669'
+    },
+    addressFooter: {
+      marginTop: '32px',
+      padding: '16px',
+      backgroundColor: '#f9fafb',
+      borderRadius: '8px',
+      border: '1px solid #e5e7eb',
+      fontSize: '14px',
+      color: '#6b7280',
+      fontFamily: 'monospace'
+    },
+    refreshButton: {
+      backgroundColor: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      padding: '12px 24px',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      transition: 'all 0.2s ease',
+      marginBottom: '24px'
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
+          <div style={styles.spinner}></div>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>Analyzing your credit profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const statusMap = {
+    0: { text: "Requested", color: "#f59e0b" },
+    1: { text: "Funded", color: "#3b82f6" },
+    2: { text: "Repaid", color: "#10b981" },
+    3: { text: "Defaulted", color: "#ef4444" },
+    4: { text: "Removed", color: "#6b7280" }
+  };
 
   return (
-    <div style={styles.section}>
-      <h2 style={styles.header}>📊 Credit Assessment</h2>
+    <div style={styles.container}>
+      <h1 style={styles.header}>
+        📊 Credit Assessment
+      </h1>
+      <p style={styles.subtitle}>
+        Comprehensive analysis of your borrowing history and creditworthiness
+      </p>
+
+      <button 
+        style={styles.refreshButton}
+        onClick={fetchCreditData}
+        onMouseEnter={(e) => {
+          e.target.style.backgroundColor = '#2563eb';
+          e.target.style.transform = 'translateY(-1px)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.backgroundColor = '#3b82f6';
+          e.target.style.transform = 'translateY(0)';
+        }}
+      >
+        🔄 Refresh Assessment
+      </button>
 
       {error && (
-        <div style={{ padding: "15px", backgroundColor: "#f8d7da", borderRadius: "5px", marginBottom: "20px" }}>
-          {error}
+        <div style={styles.errorAlert}>
+          ⚠️ {error}
         </div>
       )}
 
+      {/* Credit Score Card */}
       <div style={{
-        ...styles.card,
-        marginBottom: "25px",
-        textAlign: "center",
-        background: `linear-gradient(135deg, ${getCreditScoreColor(creditScore)}15, ${getCreditScoreColor(creditScore)}05)`,
-        border: `2px solid ${getCreditScoreColor(creditScore)}`
+        ...styles.creditScoreCard,
+        background: `linear-gradient(135deg, ${getCreditScoreColor(creditScore)}15, ${getCreditScoreColor(creditScore)}05)`
       }}>
-        <h3 style={{ margin: "0 0 15px 0", color: getCreditScoreColor(creditScore) }}>Your Credit Score</h3>
-        <div style={{ fontSize: "48px", fontWeight: "bold", color: getCreditScoreColor(creditScore) }}>
+        <h2 style={{ margin: 0, color: '#1f2937', fontSize: '20px', fontWeight: '600' }}>
+          Your Credit Score
+        </h2>
+        <div style={{
+          ...styles.creditScoreNumber,
+          color: getCreditScoreColor(creditScore)
+        }}>
           {creditScore}
         </div>
-        <div style={{ fontSize: "18px", fontWeight: "bold", color: getCreditScoreColor(creditScore) }}>
+        <div style={{
+          ...styles.creditScoreLabel,
+          color: getCreditScoreColor(creditScore)
+        }}>
           {getCreditScoreLabel(creditScore)}
+        </div>
+        
+        {/* Progress Bar */}
+        <div style={{
+          marginTop: '24px',
+          height: '8px',
+          backgroundColor: '#e5e7eb',
+          borderRadius: '4px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${(creditScore / 1000) * 100}%`,
+            backgroundColor: getCreditScoreColor(creditScore),
+            transition: 'width 0.5s ease'
+          }}></div>
+        </div>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '8px',
+          fontSize: '12px',
+          color: '#6b7280'
+        }}>
+          <span>0</span>
+          <span>1000</span>
         </div>
       </div>
 
-      <div style={styles.card}>
-        <h3>📋 Summary</h3>
-        <p>Total Loans: {metrics.totalLoans}</p>
-        <p>Repaid Loans: {metrics.repaidLoans}</p>
-        <p>Active Loans: {metrics.activeLoans}</p>
-        <p>Defaulted Loans: {metrics.defaultedLoans}</p>
-        <p>Total Borrowed: {metrics.totalBorrowed} ETH</p>
-        <p>Repayment Rate: {metrics.repaymentRate}%</p>
+      <div style={styles.gridContainer}>
+        {/* Metrics Card */}
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>📈 Credit Metrics</h3>
+          <div style={styles.metricsGrid}>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.totalLoans}</div>
+              <div style={styles.metricLabel}>Total Loans</div>
+            </div>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.repaidLoans}</div>
+              <div style={styles.metricLabel}>Repaid</div>
+            </div>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.activeLoans}</div>
+              <div style={styles.metricLabel}>Active</div>
+            </div>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.defaultedLoans}</div>
+              <div style={styles.metricLabel}>Defaulted</div>
+            </div>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.totalBorrowed}</div>
+              <div style={styles.metricLabel}>Total ETH</div>
+            </div>
+            <div style={styles.metric}>
+              <div style={styles.metricValue}>{metrics.repaymentRate}%</div>
+              <div style={styles.metricLabel}>Repayment Rate</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Credit Tips Card */}
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>💡 Credit Tips</h3>
+          <ul style={styles.tipsList}>
+            {creditTips.map((tip, idx) => (
+              <li key={idx} style={styles.tipItem}>
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      <div style={styles.card}>
-        <h3>💡 Credit Tips</h3>
-        <ul>
-          {creditTips.map((tip, i) => <li key={i}>{tip}</li>)}
-        </ul>
-      </div>
-
+      {/* Loan History */}
       {creditHistory.length > 0 && (
         <div style={styles.card}>
-          <h3>📝 Recent Loans</h3>
-          {creditHistory.slice(0, 3).map((loan, index) => {
-            const status = Number(loan.status);
-            const statusInfo = {
-              0: { text: "Pending", color: "#999" },
-              1: { text: "Funded", color: "#2196F3" },
-              2: { text: "Repaid", color: "#4CAF50" },
-              3: { text: "Defaulted", color: "#ff4444" }
-            };
-            const info = statusInfo[status] || { text: "Unknown", color: "#666" };
-
+          <h3 style={styles.cardTitle}>📝 Recent Loan History</h3>
+          {creditHistory.slice(0, 5).map((loan, idx) => {
+            const statusInfo = statusMap[loan.status] || { text: "Unknown", color: "#6b7280" };
             return (
-              <div key={index} style={{ marginBottom: "10px", padding: "10px", borderLeft: `5px solid ${info.color}`, backgroundColor: "#f9f9f9", borderRadius: "5px" }}>
-                <strong>ID:</strong> {loan.id?.toString() || "N/A"}<br />
-                <strong>Amount:</strong> {parseFloat(formatEther(loan.amount)).toFixed(4)} ETH<br />
-                <strong>Status:</strong> <span style={{ color: info.color }}>{info.text}</span>
+              <div
+                key={idx}
+                style={{
+                  ...styles.loanHistoryItem,
+                  borderLeftColor: statusInfo.color
+                }}
+              >
+                <div style={styles.loanHistoryHeader}>
+                  <span style={styles.loanId}>Loan #{loan.id}</span>
+                  <span style={{
+                    ...styles.statusBadge,
+                    backgroundColor: statusInfo.color
+                  }}>
+                    {statusInfo.text}
+                  </span>
+                </div>
+                <div style={styles.loanAmount}>
+                  {loan.amount.toFixed(4)} ETH
+                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      <div style={{ marginTop: "15px", fontSize: "12px", color: "#999" }}>
-        <strong>Your address:</strong> {userAddress || "Not connected"}
+      {/* Address Footer */}
+      <div style={styles.addressFooter}>
+        <strong>Connected Address:</strong> {userAddress}
       </div>
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
