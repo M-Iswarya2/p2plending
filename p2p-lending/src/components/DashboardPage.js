@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { getContract } from "../contracts/contract";
-import { formatEther } from "ethers";
+// Remove unused import
+// import { formatEther } from "ethers";
 
 export default function DashboardPage({ role }) {
   const [loading, setLoading] = useState(true);
@@ -8,7 +9,8 @@ export default function DashboardPage({ role }) {
   const [stats, setStats] = useState({});
   const [error, setError] = useState(null);
 
-  const retryFetchData = async () => {
+  // Wrap retryFetchData with useCallback to fix the dependency warning
+  const retryFetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -89,11 +91,11 @@ export default function DashboardPage({ role }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [role]); // Add role as a dependency since it's used in the function
 
   useEffect(() => {
     retryFetchData();
-  }, [role]);
+  }, [retryFetchData]); // Now retryFetchData is properly included as a dependency
 
   const styles = {
     container: {

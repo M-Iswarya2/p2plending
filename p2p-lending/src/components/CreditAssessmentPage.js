@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { getContract } from "../contracts/contract";
 
 export default function CreditAssessmentPage() {
@@ -18,7 +18,7 @@ export default function CreditAssessmentPage() {
     return Math.max(0, Math.min(1000, Math.floor(score)));
   };
 
-  const fetchCreditData = async () => {
+  const fetchCreditData = useCallback(async () => {
     try {
       if (!window.ethereum) {
         setError("Please install MetaMask");
@@ -52,11 +52,11 @@ export default function CreditAssessmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCreditData();
-  }, []);
+  }, [fetchCreditData]);
 
   const getCreditScoreColor = (score) => {
     if (score >= 750) return "#10b981";

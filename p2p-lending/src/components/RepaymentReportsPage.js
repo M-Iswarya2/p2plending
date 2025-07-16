@@ -6,7 +6,7 @@ import { formatEther } from "ethers";
 export default function RepaymentReportsPage() {
   const [myLendingHistory, setMyLendingHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // all, repaid, active, overdue
+  const [filter] = useState("all"); // all, repaid, active, overdue
 
   const fetchMyLendingHistory = async () => {
     try {
@@ -81,13 +81,6 @@ export default function RepaymentReportsPage() {
     const currentTime = Math.floor(Date.now() / 1000);
     const loanDeadline = Number(loan.timestamp) + Number(loan.duration);
     return currentTime > loanDeadline && Number(loan.status) === 1;
-  };
-
-  const getDaysFromDeadline = (loan) => {
-    const currentTime = Math.floor(Date.now() / 1000);
-    const loanDeadline = Number(loan.timestamp) + Number(loan.duration);
-    const secondsDiff = currentTime - loanDeadline;
-    return Math.floor(secondsDiff / 86400);
   };
 
   const getFilteredLoans = () => {
@@ -175,10 +168,7 @@ export default function RepaymentReportsPage() {
                 ({filteredLoans.length})
               </h3>
               {filteredLoans.map((loan, index) => {
-                const loanDetails = calculateLoanDetails(loan);
                 const status = getLoanStatus(loan);
-                const isOverdue = isLoanOverdue(loan);
-                const daysFromDeadline = getDaysFromDeadline(loan);
                 return (
                   <div key={index} style={{ ...styles.card, marginBottom: "15px", border: `2px solid ${status.color}`, borderLeft: `6px solid ${status.color}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>

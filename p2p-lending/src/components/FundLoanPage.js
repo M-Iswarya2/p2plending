@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import styles from "../styles";
 import { getContract } from "../contracts/contract";
-import { formatEther, parseEther } from "ethers";
+import {parseEther } from "ethers";
 
 export default function FundLoanPage() {
   const [loans, setLoans] = useState([]);
