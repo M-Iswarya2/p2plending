@@ -1,7 +1,5 @@
 import React, { useState } from "react";
-import styles from "../styles";
 import { getContract } from "../contracts/contract";
-import { parseEther } from "ethers";
 
 export default function LoanRequestPage() {
   const [amount, setAmount] = useState("");
